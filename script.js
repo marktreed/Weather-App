@@ -72,14 +72,25 @@ function convertWindSpeed(kmh) {
   return Math.round(kmh);
 }
 
-function formatDirection(degrees) {
+function formatCompassDirection(degrees) {
   const compass = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
   const index = Math.round(degrees / 22.5) % 16;
-  return `${compass[index]} (${Math.round(degrees)}°)`;
+  return compass[index];
+}
+
+function formatWindForecast(speed, direction) {
+  if (!Number.isFinite(speed) || !Number.isFinite(direction)) return '--';
+  const unit = currentUnit === 'english' ? 'mph' : 'km/h';
+  return `${convertWindSpeed(speed)} ${unit} ${formatCompassDirection(direction)}`;
+}
+
+function formatDirection(degrees) {
+  const direction = formatCompassDirection(degrees);
+  return `${direction} (${Math.round(degrees)}\u00b0)`;
 }
 
 function getWindDirectionArrow(degrees) {
-  const arrows = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+  const arrows = ['\u2191', '\u2197', '\u2192', '\u2198', '\u2193', '\u2199', '\u2190', '\u2196'];
   const index = Math.round(degrees / 45) % 8;
   return arrows[index];
 }
@@ -230,36 +241,36 @@ function formatMoonTimes(times) {
 
 function getWeatherEmoji(code) {
   const map = {
-    0: '☀️',
-    1: '🌤️',
-    2: '⛅',
-    3: '☁️',
-    45: '🌫️',
-    48: '🌫️',
-    51: '🌧️',
-    53: '🌧️',
-    55: '🌧️',
-    56: '🌧️',
-    57: '🌧️',
-    61: '🌧️',
-    63: '🌧️',
-    65: '⛈️',
-    66: '🌧️',
-    67: '🌧️',
-    71: '🌨️',
-    73: '🌨️',
-    75: '❄️',
-    77: '🌨️',
-    80: '🌦️',
-    81: '🌦️',
-    82: '⛈️',
-    85: '🌨️',
-    86: '❄️',
-    95: '⛈️',
-    96: '⛈️',
-    99: '⛈️',
+    0: '\u2600\uFE0F',
+    1: '\uD83C\uDF24\uFE0F',
+    2: '\u26C5',
+    3: '\u2601\uFE0F',
+    45: '\uD83C\uDF2B\uFE0F',
+    48: '\uD83C\uDF2B\uFE0F',
+    51: '\uD83C\uDF27\uFE0F',
+    53: '\uD83C\uDF27\uFE0F',
+    55: '\uD83C\uDF27\uFE0F',
+    56: '\uD83C\uDF27\uFE0F',
+    57: '\uD83C\uDF27\uFE0F',
+    61: '\uD83C\uDF27\uFE0F',
+    63: '\uD83C\uDF27\uFE0F',
+    65: '\u26C8\uFE0F',
+    66: '\uD83C\uDF27\uFE0F',
+    67: '\uD83C\uDF27\uFE0F',
+    71: '\uD83C\uDF28\uFE0F',
+    73: '\uD83C\uDF28\uFE0F',
+    75: '\u2744\uFE0F',
+    77: '\uD83C\uDF28\uFE0F',
+    80: '\uD83C\uDF26\uFE0F',
+    81: '\uD83C\uDF26\uFE0F',
+    82: '\u26C8\uFE0F',
+    85: '\uD83C\uDF28\uFE0F',
+    86: '\u2744\uFE0F',
+    95: '\u26C8\uFE0F',
+    96: '\u26C8\uFE0F',
+    99: '\u26C8\uFE0F',
   };
-  return map[code] || '🌈';
+  return map[code] || '\uD83C\uDF08';
 }
 
 function getMoonPhaseLabel(value) {
@@ -286,7 +297,8 @@ function getMoonIcon(value) {
   return 'phase-waning-crescent';
 }
 
-function getMoonPhaseValue(date) {  const year = date.getUTCFullYear();
+function getMoonPhaseValue(date) {
+  const year = date.getUTCFullYear();
   let month = date.getUTCMonth() + 1;
   let day = date.getUTCDate() + date.getUTCHours() / 24 + date.getUTCMinutes() / 1440 + date.getUTCSeconds() / 86400;
   let y = year;
@@ -371,46 +383,61 @@ function buildWeatherCard(location) {
         <div>
           <p class="location-name">${location.name}</p>
           <p class="location-meta">${location.latitude.toFixed(3)}, ${location.longitude.toFixed(3)}</p>
-          <p class="condition-text">Loading current conditions…</p>
+          <p class="condition-text">Loading current conditions&hellip;</p>
         </div>
-        <div class="weather-icon">☁️</div>
+        <div class="weather-icon">${getWeatherEmoji(3)}</div>
       </div>
 
       <div class="current-row">
         <div>
-          <p class="temperature">--°</p>
-          <p class="temperature-sub">Waiting for data…</p>
+          <p class="temperature">--&deg;</p>
+          <p class="temperature-sub">Waiting for data&hellip;</p>
         </div>
         <div class="stat-grid">
           <div class="stat-pill">
             <span>Wind</span>
-            <strong class="wind-detail">—</strong>
+            <strong class="wind-detail">&mdash;</strong>
           </div>
           <div class="stat-pill">
             <span>Humidity</span>
-            <strong class="humidity-detail">—</strong>
+            <strong class="humidity-detail">&mdash;</strong>
           </div>
           <div class="stat-pill">
             <span>Rain</span>
-            <strong class="rain-detail">—</strong>
+            <strong class="rain-detail">&mdash;</strong>
           </div>
+        </div>
+      </div>
+
+      <div class="today-summary">
+        <div class="summary-pill">
+          <span>High / Low</span>
+          <strong class="summary-temp">&mdash;</strong>
+        </div>
+        <div class="summary-pill">
+          <span>Max wind</span>
+          <strong class="summary-wind">&mdash;</strong>
+        </div>
+        <div class="summary-pill">
+          <span>Today rain</span>
+          <strong class="summary-rain">&mdash;</strong>
         </div>
       </div>
 
       <div class="weather-content">
         <div class="detail-row">
           <span>Sun rise/set</span>
-          <strong class="sun-detail">—</strong>
+          <strong class="sun-detail">&mdash;</strong>
         </div>
         <div class="detail-row">
           <span>Moon rise/set</span>
-          <strong class="moon-times-detail">—</strong>
+          <strong class="moon-times-detail">&mdash;</strong>
         </div>
         <div class="detail-row moon-detail-row">
           <span>Moon phase</span>
           <div class="moon-phase-inline">
             <span class="moon-phase-icon" id="${location.moonIconId}"></span>
-            <strong class="moon-detail" id="${location.moonLabelId}">—</strong>
+            <strong class="moon-detail" id="${location.moonLabelId}">&mdash;</strong>
           </div>
         </div>
       </div>
@@ -429,17 +456,30 @@ function buildWeatherCard(location) {
             <span class="dial-time dial-time-noon">12 PM</span>
             <span class="dial-time dial-time-6pm">6 PM</span>
           </div>
-          <div class="phase-label"><span id="${location.sunLabelId}">—</span></div>
+          <div class="phase-label"><span id="${location.sunLabelId}">&mdash;</span></div>
         </section>
       </div>
 
       <section class="hourly-forecast">
         <p class="hourly-forecast-title">Hourly forecast</p>
+        <div class="forecast-labels hourly-labels">
+          <span>Time</span>
+          <span>Sky</span>
+          <span>Temp</span>
+          <span>Rain</span>
+          <span>Wind</span>
+        </div>
         <div class="hourly-items"></div>
       </section>
 
       <section class="daily-forecast">
         <p class="daily-forecast-title">5-day outlook</p>
+        <div class="forecast-labels daily-labels">
+          <span>Day</span>
+          <span>Forecast</span>
+          <span>Temp</span>
+          <span>Wind</span>
+        </div>
         <div class="daily-items"></div>
       </section>
 
@@ -454,7 +494,7 @@ function buildWeatherCard(location) {
 
 function buildHourlyItems(data, currentIndex) {
   const start = currentIndex >= 0 ? currentIndex : 0;
-  const slice = data.hourly.time.slice(start, start + 12);
+  const slice = data.hourly.time.slice(start, start + 6);
   return slice
     .map((time, index) => {
       const actualIndex = start + index;
@@ -462,12 +502,17 @@ function buildHourlyItems(data, currentIndex) {
       const code = data.hourly.weathercode[actualIndex];
       const temp = convertTemperature(data.hourly.temperature_2m[actualIndex]);
       const rain = data.hourly.precipitation_probability[actualIndex];
+      const wind = formatWindForecast(
+        data.hourly.windspeed_10m?.[actualIndex],
+        data.hourly.winddirection_10m?.[actualIndex]
+      );
       return `
         <div class="hourly-card">
           <strong>${formatHour(hour)}</strong>
           <span>${getWeatherEmoji(code)}</span>
-          <span>${temp}°</span>
+          <span>${temp}&deg;</span>
           <span>${rain}% rain</span>
+          <span>${wind}</span>
         </div>
       `;
     })
@@ -482,42 +527,20 @@ function buildDailyItems(data) {
       const code = data.daily.weathercode[index];
       const low = convertTemperature(data.daily.temperature_2m_min[index]);
       const high = convertTemperature(data.daily.temperature_2m_max[index]);
+      const wind = formatWindForecast(
+        data.daily.windspeed_10m_max?.[index],
+        data.daily.winddirection_10m_dominant?.[index]
+      );
       return `
         <div class="daily-card">
           <strong>${formatDay(date)}</strong>
           <span>${getWeatherEmoji(code)} ${weatherCodeMap[code] || 'Forecast'}</span>
-          <span>${low}° / ${high}°</span>
+          <span>${low}&deg; / ${high}&deg;</span>
+          <span>${wind}</span>
         </div>
       `;
     })
     .join('');
-}
-
-function parseCoordinateInput(input) {
-  const parts = input.split(',').map((part) => part.trim());
-  if (parts.length !== 2) return null;
-  const lat = parseFloat(parts[0]);
-  const lon = parseFloat(parts[1]);
-  if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
-    return { latitude: lat, longitude: lon, name: `${lat.toFixed(3)}, ${lon.toFixed(3)}` };
-  }
-  return null;
-}
-
-async function resolveLocation(query) {
-  const coordinate = parseCoordinateInput(query);
-  if (coordinate) return coordinate;
-  const endpoint = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`;
-  const response = await fetch(endpoint);
-  if (!response.ok) throw new Error('Unable to search location');
-  const data = await response.json();
-  if (!data.results || !data.results.length) throw new Error('Location not found');
-  const result = data.results[0];
-  return {
-    latitude: result.latitude,
-    longitude: result.longitude,
-    name: `${result.name}${result.admin1 ? ', ' + result.admin1 : ''}${result.country ? ', ' + result.country : ''}`,
-  };
 }
 
 function loadStoredSettings() {
@@ -531,13 +554,7 @@ function loadStoredSettings() {
 }
 
 function saveSettings() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme: currentTheme, unit: currentUnit, locations }));
-}
-
-function setStatusMessage(message) {
-  const status = document.getElementById('status-message');
-  if (!status) return;
-  status.textContent = message;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme: currentTheme, unit: currentUnit }));
 }
 
 function setTheme(theme) {
@@ -558,44 +575,6 @@ function renderCards() {
   root.innerHTML = locations.map(buildWeatherCard).join('');
 }
 
-async function updateLocationsFromInputs() {
-  const input1 = document.getElementById('location-1-input').value.trim();
-  const input2 = document.getElementById('location-2-input').value.trim();
-  const resolved = [];
-  const fallbackMessages = [];
-
-  try {
-    resolved.push(await resolveLocation(input1 || defaultLocations[0].name));
-  } catch (error) {
-    console.warn('Location 1 resolution failed', error);
-    resolved.push({ ...defaultLocations[0] });
-    fallbackMessages.push(`Location 1 not found; using ${defaultLocations[0].name}`);
-  }
-
-  try {
-    resolved.push(await resolveLocation(input2 || defaultLocations[1].name));
-  } catch (error) {
-    console.warn('Location 2 resolution failed', error);
-    resolved.push({ ...defaultLocations[1] });
-    fallbackMessages.push(`Location 2 not found; using ${defaultLocations[1].name}`);
-  }
-
-  locations = resolved.map((item, index) => ({
-    ...defaultLocations[index],
-    name: item.name,
-    latitude: item.latitude,
-    longitude: item.longitude,
-  }));
-
-  renderCards();
-  saveSettings();
-  setStatusMessage('Location loaded, refreshing weather…');
-  await refreshWeather();
-  if (fallbackMessages.length) {
-    setStatusMessage(fallbackMessages.join(' | '));
-  }
-}
-
 function showError(location, message) {
   const card = document.getElementById(location.cardId);
   if (!card) return;
@@ -604,7 +583,7 @@ function showError(location, message) {
   const temperatureEl = card.querySelector('.temperature');
   const temperatureSub = card.querySelector('.temperature-sub');
   conditionText && (conditionText.textContent = message);
-  temperatureEl && (temperatureEl.textContent = '--°');
+  temperatureEl && (temperatureEl.textContent = '--\u00b0');
   temperatureSub && (temperatureSub.textContent = '');
 }
 
@@ -614,8 +593,20 @@ function findCurrentHourlyIndex(data, currentTimestamp) {
   return data.hourly.time.findIndex((time) => new Date(time).getTime() >= currentTimestamp);
 }
 
+function getRemainingTodayRainChance(data, now) {
+  const endOfDay = new Date(now);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const chances = data.hourly.time
+    .map((time, index) => ({ time: new Date(time), chance: data.hourly.precipitation_probability[index] }))
+    .filter(({ time, chance }) => time >= now && time <= endOfDay && Number.isFinite(chance))
+    .map(({ chance }) => chance);
+
+  return chances.length ? Math.max(...chances) : null;
+}
+
 async function fetchWeather(location) {
-  const endpoint = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current_weather=true&hourly=temperature_2m,apparent_temperature,relativehumidity_2m,precipitation_probability,weathercode&daily=sunrise,sunset,weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`;
+  const endpoint = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current_weather=true&hourly=temperature_2m,apparent_temperature,relativehumidity_2m,precipitation_probability,weathercode,windspeed_10m,winddirection_10m&daily=sunrise,sunset,weathercode,temperature_2m_max,temperature_2m_min,windspeed_10m_max,winddirection_10m_dominant&timezone=auto`;
   try {
     const response = await fetch(endpoint);
     if (!response.ok) throw new Error('Network response was not ok');
@@ -648,6 +639,13 @@ function updateCard(location, data) {
   const sunset = new Date(data.daily.sunset[0]);
   const now = new Date(current.time);
   const moonTimes = getMoonTimes(now, location.latitude, location.longitude);
+  const todayLow = convertTemperature(data.daily.temperature_2m_min[0]);
+  const todayHigh = convertTemperature(data.daily.temperature_2m_max[0]);
+  const todayMaxWind = formatWindForecast(
+    data.daily.windspeed_10m_max?.[0],
+    data.daily.winddirection_10m_dominant?.[0]
+  );
+  const todayRainChance = getRemainingTodayRainChance(data, now);
 
   const conditionTextEl = card.querySelector('.condition-text');
   const weatherIconEl = card.querySelector('.weather-icon');
@@ -658,20 +656,26 @@ function updateCard(location, data) {
   const sunDetailEl = card.querySelector('.sun-detail');
   const moonTimesEl = card.querySelector('.moon-times-detail');
   const windDetailEl = card.querySelector('.wind-detail');
+  const summaryTempEl = card.querySelector('.summary-temp');
+  const summaryWindEl = card.querySelector('.summary-wind');
+  const summaryRainEl = card.querySelector('.summary-rain');
 
   if (conditionTextEl) conditionTextEl.textContent = weatherCodeMap[current.weathercode] || 'Weather';
   if (weatherIconEl) weatherIconEl.textContent = getWeatherEmoji(current.weathercode);
-  if (temperatureEl) temperatureEl.textContent = `${convertTemperature(current.temperature)}°`;
+  if (temperatureEl) temperatureEl.textContent = `${convertTemperature(current.temperature)}\u00b0`;
   if (temperatureSubEl) {
     temperatureSubEl.textContent = apparentTemperature === null
       ? ''
-      : `Feels like ${convertTemperature(apparentTemperature)}°`;
+      : `Feels like ${convertTemperature(apparentTemperature)}\u00b0`;
   }
   if (windDetailEl) windDetailEl.textContent = `${windArrow} ${windDirection} @ ${windSpeed} ${windUnit}`;
   if (humidityEl) humidityEl.textContent = `${humidity ?? '--'}%`;
   if (rainEl) rainEl.textContent = `${rainChance ?? '--'}%`;
   if (sunDetailEl) sunDetailEl.textContent = `${formatTime(sunrise)} / ${formatTime(sunset)}`;
   if (moonTimesEl) moonTimesEl.textContent = formatMoonTimes(moonTimes);
+  if (summaryTempEl) summaryTempEl.textContent = `${todayHigh}\u00b0 / ${todayLow}\u00b0`;
+  if (summaryWindEl) summaryWindEl.textContent = todayMaxWind;
+  if (summaryRainEl) summaryRainEl.textContent = todayRainChance === null ? '--' : `${todayRainChance}%`;
 
   const moonValue = getMoonPhaseValue(new Date());
   const moonDetail = card.querySelector('.moon-detail');
@@ -699,11 +703,9 @@ function updateCard(location, data) {
 }
 
 async function refreshWeather() {
-  setStatusMessage('Fetching latest weather data…');
-  document.getElementById('last-updated').textContent = 'Updating…';
+  document.getElementById('last-updated').textContent = 'Updating\u2026';
   await Promise.all(locations.map((location) => fetchWeather(location)));
   document.getElementById('last-updated').textContent = `Last updated: ${new Date().toLocaleString()}`;
-  setStatusMessage('Weather updated');
 }
 
 function updateCurrentTime() {
@@ -724,7 +726,7 @@ function refreshDisplay() {
 
 async function init() {
   const stored = loadStoredSettings();
-  locations = stored && Array.isArray(stored.locations) ? stored.locations : defaultLocations;
+  locations = defaultLocations.map((location) => ({ ...location }));
   currentTheme = stored && stored.theme ? stored.theme : 'dark';
   let savedUnit = stored && stored.unit ? stored.unit : 'metric';
   if (savedUnit === 'celsius') savedUnit = 'metric';
@@ -734,13 +736,6 @@ async function init() {
   updateUnitToggleLabel();
 
   renderCards();
-
-  document.getElementById('location-1-input').value = locations[0].name;
-  document.getElementById('location-2-input').value = locations[1].name;
-
-  document.getElementById('load-locations-btn').addEventListener('click', async () => {
-    await updateLocationsFromInputs();
-  });
 
   document.getElementById('refresh-btn').addEventListener('click', refreshWeather);
   document.getElementById('theme-toggle').addEventListener('click', () => {

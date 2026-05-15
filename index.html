@@ -3,36 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Two-Location Weather Dashboard</title>
+  <title>Locked Weather Dashboard</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="page-shell">
     <header class="page-header">
-      <div>
-        <p class="eyebrow">Weather Dashboard</p>
-        <h1>Two-Location Weather Overview</h1>
-        <p class="subtitle">Current conditions, sun & moon phase, wind, hourly forecast, and 5-day outlook for both locations. Enter a place name or coordinates like 44.4066,-121.0823.</p>
+      <div class="header-main">
+        <h1>Weather Dashboard</h1>
         <div class="current-time" id="current-time">Current time: --</div>
       </div>
       <div class="control-panel">
-        <div class="location-form">
-          <label>
-            Location 1
-            <input id="location-1-input" type="text" placeholder="Terrebonne, OR or 44.4066,-121.0823" />
-          </label>
-          <label>
-            Location 2
-            <input id="location-2-input" type="text" placeholder="West Menlo Park, CA or 37.4626,-122.1826" />
-          </label>
-          <button id="load-locations-btn" class="primary-btn">Load locations</button>
-        </div>
         <div class="action-bar">
           <button id="refresh-btn" class="secondary-btn">Refresh</button>
           <button id="theme-toggle" class="secondary-btn">Light theme</button>
           <button id="unit-toggle" class="secondary-btn">Metric / English</button>
           <div class="last-updated" id="last-updated">Last updated: --</div>
-          <div class="status-message" id="status-message">Ready</div>
         </div>
       </div>
     </header>
@@ -40,7 +26,7 @@
     <main id="weather-root" class="weather-grid"></main>
 
     <footer class="page-footer">
-      <p>Weather data from Open-Meteo &middot; Radar from RainViewer &middot; Locations stored locally</p>
+      <p>Weather data from Open-Meteo &middot; Radar from RainViewer &middot; Locations locked to Terrebonne and West Menlo Park</p>
     </footer>
   </div>
 
