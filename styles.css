@@ -182,18 +182,19 @@ button:active {
 .weather-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
+  gap: 20px;
+  align-items: start;
 }
 
 .weather-card {
   background: var(--surface);
   border: 1px solid var(--surface-border);
-  border-radius: 32px;
+  border-radius: 28px;
   box-shadow: var(--shadow);
-  padding: 28px;
-  min-height: 540px;
+  padding: 22px;
+  min-height: 480px;
   display: grid;
-  gap: 24px;
+  gap: 20px;
   justify-items: stretch;
   transition: transform 180ms ease, background-color 180ms ease;
 }
@@ -207,7 +208,7 @@ button:active {
 .map-panel {
   justify-self: center;
   width: 100%;
-  max-width: 520px;
+  max-width: 440px;
 }
 
 .weather-card:hover {
@@ -352,13 +353,6 @@ button:active {
   margin-top: 14px;
 }
 
-.sun-moon-inline {
-  display: inline-block;
-  margin-left: 8px;
-  font-size: 1.05rem;
-  vertical-align: middle;
-}
-
 .moon-detail-row {
   display: flex;
   justify-content: center;
@@ -433,18 +427,53 @@ button:active {
 
 .sun-dial {
   position: relative;
-  width: 100px;
-  height: 100px;
+  width: 148px;
+  height: 132px;
   margin: 0 auto;
 }
 
 .sun-circle {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 16px 24px;
+  width: 100px;
+  height: 100px;
 }
 
 .sun-marker {
   filter: drop-shadow(0 0 10px rgba(255, 187, 118, 0.5));
+}
+
+.dial-time {
+  position: absolute;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dial-time-midnight {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.dial-time-6am {
+  top: 66px;
+  right: 0;
+  transform: translateY(-50%);
+}
+
+.dial-time-noon {
+  right: 50%;
+  bottom: 0;
+  transform: translateX(50%);
+}
+
+.dial-time-6pm {
+  top: 66px;
+  left: 0;
+  transform: translateY(-50%);
 }
 
 .moon-icon {
@@ -481,7 +510,7 @@ button:active {
   margin-top: 14px;
 }
 
-..phase-label strong,
+.phase-label strong,
 .phase-label span {
   display: inline-block;
   color: var(--text);
@@ -549,22 +578,9 @@ button:active {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.map-preview {
-  display: grid;
-  gap: 16px;
-}
-
 .map-details {
   display: grid;
   gap: 8px;
-}
-
-.radar-image {
-  width: 100%;
-  min-height: 200px;
-  border-radius: 18px;
-  background: rgba(0, 0, 0, 0.14);
-  object-fit: cover;
 }
 
 .map-link {

@@ -57,7 +57,6 @@ let locations = [];
 let currentTheme = 'dark';
 let currentUnit = 'metric';
 let weatherData = {};
-let radarMetadata = null;
 
 function convertTemperature(celsius) {
   if (currentUnit === 'english') {
@@ -85,37 +84,6 @@ function getWindDirectionArrow(degrees) {
   return arrows[index];
 }
 
-function latLonToTile(lat, lon, zoom) {
-  const x = Math.floor(((lon + 180) / 360) * Math.pow(2, zoom));
-  const latRad = (lat * Math.PI) / 180;
-  const y = Math.floor(
-    (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, zoom)
-  );
-  return { x, y };
-}
-
-async function loadRadarMetadata() {
-  if (radarMetadata) return radarMetadata;
-  try {
-    const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
-    if (!response.ok) throw new Error('Radar metadata fetch failed');
-    radarMetadata = await response.json();
-  } catch (error) {
-    console.warn('Unable to load radar metadata', error);
-    radarMetadata = null;
-  }
-  return radarMetadata;
-}
-
-async function getRadarTileUrl(lat, lon) {
-  const metadata = await loadRadarMetadata();
-  if (!metadata?.radar?.past?.length) return null;
-  const latestFrame = metadata.radar.past[metadata.radar.past.length - 1];
-  const zoom = 5;
-  const { x, y } = latLonToTile(lat, lon, zoom);
-  return `https://tilecache.rainviewer.com/v2/radar/${latestFrame.time}/${zoom}/${x}/${y}/2/1_1.png`;
-}
-
 function formatTime(date) {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
@@ -130,6 +98,134 @@ function formatHour(date) {
 
 function formatDay(date) {
   return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+const astroRad = Math.PI / 180;
+const astroDayMs = 1000 * 60 * 60 * 24;
+const astroJ1970 = 2440588;
+const astroJ2000 = 2451545;
+const astroObliquity = astroRad * 23.4397;
+
+function toJulian(date) {
+  return date.valueOf() / astroDayMs - 0.5 + astroJ1970;
+}
+
+function toDays(date) {
+  return toJulian(date) - astroJ2000;
+}
+
+function rightAscension(l, b) {
+  return Math.atan2(
+    Math.sin(l) * Math.cos(astroObliquity) - Math.tan(b) * Math.sin(astroObliquity),
+    Math.cos(l)
+  );
+}
+
+function declination(l, b) {
+  return Math.asin(
+    Math.sin(b) * Math.cos(astroObliquity) + Math.cos(b) * Math.sin(astroObliquity) * Math.sin(l)
+  );
+}
+
+function siderealTime(days, lw) {
+  return astroRad * (280.16 + 360.9856235 * days) - lw;
+}
+
+function altitude(H, phi, dec) {
+  return Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
+}
+
+function astroRefraction(height) {
+  const adjustedHeight = height < 0 ? 0 : height;
+  return 0.0002967 / Math.tan(adjustedHeight + 0.00312536 / (adjustedHeight + 0.08901179));
+}
+
+function moonCoords(days) {
+  const L = astroRad * (218.316 + 13.176396 * days);
+  const M = astroRad * (134.963 + 13.064993 * days);
+  const F = astroRad * (93.272 + 13.22935 * days);
+  const l = L + astroRad * 6.289 * Math.sin(M);
+  const b = astroRad * 5.128 * Math.sin(F);
+
+  return {
+    ra: rightAscension(l, b),
+    dec: declination(l, b),
+  };
+}
+
+function getMoonAltitude(date, latitude, longitude) {
+  const lw = astroRad * -longitude;
+  const phi = astroRad * latitude;
+  const days = toDays(date);
+  const coords = moonCoords(days);
+  const H = siderealTime(days, lw) - coords.ra;
+  return altitude(H, phi, coords.dec) + astroRefraction(altitude(H, phi, coords.dec));
+}
+
+function hoursLater(date, hours) {
+  return new Date(date.valueOf() + hours * 60 * 60 * 1000);
+}
+
+function getMoonTimes(date, latitude, longitude) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+
+  const horizon = 0.133 * astroRad;
+  let h0 = getMoonAltitude(start, latitude, longitude) - horizon;
+  let rise = null;
+  let set = null;
+  let ye = 0;
+
+  for (let hour = 1; hour <= 24; hour += 2) {
+    const h1 = getMoonAltitude(hoursLater(start, hour), latitude, longitude) - horizon;
+    const h2 = getMoonAltitude(hoursLater(start, hour + 1), latitude, longitude) - horizon;
+    const a = (h0 + h2) / 2 - h1;
+    const b = (h2 - h0) / 2;
+    const xe = -b / (2 * a);
+    ye = (a * xe + b) * xe + h1;
+    const discriminant = b * b - 4 * a * h1;
+    let roots = 0;
+    let x1 = 0;
+    let x2 = 0;
+
+    if (discriminant >= 0) {
+      const dx = Math.sqrt(discriminant) / (Math.abs(a) * 2);
+      x1 = xe - dx;
+      x2 = xe + dx;
+      if (Math.abs(x1) <= 1) roots += 1;
+      if (Math.abs(x2) <= 1) roots += 1;
+      if (x1 < -1) x1 = x2;
+    }
+
+    if (roots === 1) {
+      if (h0 < 0) rise = hour + x1;
+      else set = hour + x1;
+    } else if (roots === 2) {
+      rise = hour + (ye < 0 ? x2 : x1);
+      set = hour + (ye < 0 ? x1 : x2);
+    }
+
+    if (rise !== null && set !== null) break;
+    h0 = h2;
+  }
+
+  if (rise !== null || set !== null) {
+    return {
+      rise: rise === null ? null : hoursLater(start, rise),
+      set: set === null ? null : hoursLater(start, set),
+    };
+  }
+
+  return ye > 0 ? { alwaysUp: true } : { alwaysDown: true };
+}
+
+function formatMoonTimes(times) {
+  if (times.rise && times.set) return `${formatTime(times.rise)} / ${formatTime(times.set)}`;
+  if (times.rise) return `${formatTime(times.rise)} / No set`;
+  if (times.set) return `No rise / ${formatTime(times.set)}`;
+  if (times.alwaysUp) return 'Above horizon all day';
+  if (times.alwaysDown) return 'Below horizon all day';
+  return 'Unavailable';
 }
 
 function getWeatherEmoji(code) {
@@ -238,16 +334,11 @@ function updateSunDial(card, now, sunrise, sunset) {
 
   const daylightArc = svg.querySelector('.daylight-arc');
   const sunMarker = svg.querySelector('.sun-marker');
-  const moonMarker = svg.querySelector('.moon-marker');
 
   if (!sunrise || !sunset) {
     daylightArc.setAttribute('d', '');
     sunMarker.setAttribute('cx', 50);
     sunMarker.setAttribute('cy', 10);
-    if (moonMarker) {
-      moonMarker.setAttribute('cx', 50);
-      moonMarker.setAttribute('cy', 90);
-    }
     return;
   }
 
@@ -262,7 +353,6 @@ function updateSunDial(card, now, sunrise, sunset) {
   const sunriseAngle = sunriseHour * 15;
   const sunsetAngle = sunsetHour * 15;
   const currentAngle = currentHour * 15;
-  const moonAngle = ((currentHour + 12) % 24) * 15;
 
   // Draw daylight arc
   const path = createArcPath(sunriseAngle, sunsetAngle);
@@ -272,11 +362,6 @@ function updateSunDial(card, now, sunrise, sunset) {
   const sunPos = getCirclePosition(currentAngle);
   sunMarker.setAttribute('cx', sunPos.x);
   sunMarker.setAttribute('cy', sunPos.y);
-
-  // Position moon marker opposite the current time on the 24-hour dial
-  const moonPos = getCirclePosition(moonAngle);
-  moonMarker.setAttribute('cx', moonPos.x);
-  moonMarker.setAttribute('cy', moonPos.y);
 }
 
 function buildWeatherCard(location) {
@@ -305,13 +390,21 @@ function buildWeatherCard(location) {
             <span>Humidity</span>
             <strong class="humidity-detail">—</strong>
           </div>
+          <div class="stat-pill">
+            <span>Rain</span>
+            <strong class="rain-detail">—</strong>
+          </div>
         </div>
       </div>
 
       <div class="weather-content">
         <div class="detail-row">
-          <span>Sun times</span>
+          <span>Sun rise/set</span>
           <strong class="sun-detail">—</strong>
+        </div>
+        <div class="detail-row">
+          <span>Moon rise/set</span>
+          <strong class="moon-times-detail">—</strong>
         </div>
         <div class="detail-row moon-detail-row">
           <span>Moon phase</span>
@@ -324,14 +417,17 @@ function buildWeatherCard(location) {
 
       <div class="sun-moon-row">
         <section class="phase-panel sun-panel">
-          <h3>Sun-Moon progress <span class="sun-moon-inline">🌙</span></h3>
+          <h3>Sun Progress</h3>
           <div class="sun-dial">
             <svg class="sun-circle" viewBox="0 0 100 100">
               <circle cx="50" cy="50" r="40" fill="none" stroke="black" stroke-width="8"/>
               <path class="daylight-arc" d="" fill="none" stroke="#ffe27d" stroke-width="8" stroke-linecap="round"/>
               <circle class="sun-marker" cx="50" cy="10" r="5" fill="#ffbb76" stroke="black" stroke-width="1"/>
-              <circle class="moon-marker" cx="50" cy="90" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
             </svg>
+            <span class="dial-time dial-time-midnight">12 AM</span>
+            <span class="dial-time dial-time-6am">6 AM</span>
+            <span class="dial-time dial-time-noon">12 PM</span>
+            <span class="dial-time dial-time-6pm">6 PM</span>
           </div>
           <div class="phase-label"><span id="${location.sunLabelId}">—</span></div>
         </section>
@@ -349,7 +445,7 @@ function buildWeatherCard(location) {
 
       <section class="map-panel">
         <div class="map-details">
-          <a class="map-link" href="https://www.rainviewer.com/map.html?loc=${location.latitude},${location.longitude},7" target="_blank" rel="noopener noreferrer">Open radar</a>
+          <a class="map-link" href="https://www.rainviewer.com/map.html?loc=${location.latitude},${location.longitude},10" target="_blank" rel="noopener noreferrer">Open radar</a>
         </div>
       </section>
     </article>
@@ -451,6 +547,12 @@ function setTheme(theme) {
   saveSettings();
 }
 
+function updateUnitToggleLabel() {
+  const button = document.getElementById('unit-toggle');
+  if (!button) return;
+  button.textContent = currentUnit === 'metric' ? 'Units: Metric' : 'Units: English';
+}
+
 function renderCards() {
   const root = document.getElementById('weather-root');
   root.innerHTML = locations.map(buildWeatherCard).join('');
@@ -460,12 +562,14 @@ async function updateLocationsFromInputs() {
   const input1 = document.getElementById('location-1-input').value.trim();
   const input2 = document.getElementById('location-2-input').value.trim();
   const resolved = [];
+  const fallbackMessages = [];
 
   try {
     resolved.push(await resolveLocation(input1 || defaultLocations[0].name));
   } catch (error) {
     console.warn('Location 1 resolution failed', error);
     resolved.push({ ...defaultLocations[0] });
+    fallbackMessages.push(`Location 1 not found; using ${defaultLocations[0].name}`);
   }
 
   try {
@@ -473,6 +577,7 @@ async function updateLocationsFromInputs() {
   } catch (error) {
     console.warn('Location 2 resolution failed', error);
     resolved.push({ ...defaultLocations[1] });
+    fallbackMessages.push(`Location 2 not found; using ${defaultLocations[1].name}`);
   }
 
   locations = resolved.map((item, index) => ({
@@ -486,6 +591,9 @@ async function updateLocationsFromInputs() {
   saveSettings();
   setStatusMessage('Location loaded, refreshing weather…');
   await refreshWeather();
+  if (fallbackMessages.length) {
+    setStatusMessage(fallbackMessages.join(' | '));
+  }
 }
 
 function showError(location, message) {
@@ -500,8 +608,14 @@ function showError(location, message) {
   temperatureSub && (temperatureSub.textContent = '');
 }
 
+function findCurrentHourlyIndex(data, currentTimestamp) {
+  const exactIndex = data.hourly.time.findIndex((time) => new Date(time).getTime() === currentTimestamp);
+  if (exactIndex >= 0) return exactIndex;
+  return data.hourly.time.findIndex((time) => new Date(time).getTime() >= currentTimestamp);
+}
+
 async function fetchWeather(location) {
-  const endpoint = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current_weather=true&hourly=temperature_2m,relativehumidity_2m,precipitation_probability,weathercode&daily=sunrise,sunset,weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`;
+  const endpoint = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current_weather=true&hourly=temperature_2m,apparent_temperature,relativehumidity_2m,precipitation_probability,weathercode&daily=sunrise,sunset,weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`;
   try {
     const response = await fetch(endpoint);
     if (!response.ok) throw new Error('Network response was not ok');
@@ -522,37 +636,42 @@ function updateCard(location, data) {
   card.classList.remove('loading');
   const current = data.current_weather;
   const currentTimestamp = new Date(current.time).getTime();
-  let humidity = '--';
-  const humidityIndex = data.hourly.time.findIndex((t) => new Date(t).getTime() === currentTimestamp);
-  if (humidityIndex >= 0) {
-    humidity = data.hourly.relativehumidity_2m[humidityIndex];
-  } else {
-    const fallbackIndex = data.hourly.time.findIndex((t) => new Date(t).getTime() >= currentTimestamp);
-    if (fallbackIndex >= 0) {
-      humidity = data.hourly.relativehumidity_2m[fallbackIndex];
-    }
-  }
+  const currentHourlyIndex = findCurrentHourlyIndex(data, currentTimestamp);
+  const humidity = currentHourlyIndex >= 0 ? data.hourly.relativehumidity_2m[currentHourlyIndex] : '--';
+  const rainChance = currentHourlyIndex >= 0 ? data.hourly.precipitation_probability[currentHourlyIndex] : '--';
+  const apparentTemperature = currentHourlyIndex >= 0 ? data.hourly.apparent_temperature[currentHourlyIndex] : null;
   const windDirection = formatDirection(current.winddirection);
   const windArrow = getWindDirectionArrow(current.winddirection);
+  const windSpeed = convertWindSpeed(current.windspeed);
+  const windUnit = currentUnit === 'english' ? 'mph' : 'km/h';
   const sunrise = new Date(data.daily.sunrise[0]);
   const sunset = new Date(data.daily.sunset[0]);
   const now = new Date(current.time);
+  const moonTimes = getMoonTimes(now, location.latitude, location.longitude);
 
   const conditionTextEl = card.querySelector('.condition-text');
   const weatherIconEl = card.querySelector('.weather-icon');
   const temperatureEl = card.querySelector('.temperature');
   const temperatureSubEl = card.querySelector('.temperature-sub');
   const humidityEl = card.querySelector('.humidity-detail');
+  const rainEl = card.querySelector('.rain-detail');
   const sunDetailEl = card.querySelector('.sun-detail');
+  const moonTimesEl = card.querySelector('.moon-times-detail');
   const windDetailEl = card.querySelector('.wind-detail');
 
   if (conditionTextEl) conditionTextEl.textContent = weatherCodeMap[current.weathercode] || 'Weather';
   if (weatherIconEl) weatherIconEl.textContent = getWeatherEmoji(current.weathercode);
   if (temperatureEl) temperatureEl.textContent = `${convertTemperature(current.temperature)}°`;
-  if (temperatureSubEl) temperatureSubEl.textContent = '';
-  if (windDetailEl) windDetailEl.textContent = `${windArrow} ${windDirection}`;
+  if (temperatureSubEl) {
+    temperatureSubEl.textContent = apparentTemperature === null
+      ? ''
+      : `Feels like ${convertTemperature(apparentTemperature)}°`;
+  }
+  if (windDetailEl) windDetailEl.textContent = `${windArrow} ${windDirection} @ ${windSpeed} ${windUnit}`;
   if (humidityEl) humidityEl.textContent = `${humidity ?? '--'}%`;
+  if (rainEl) rainEl.textContent = `${rainChance ?? '--'}%`;
   if (sunDetailEl) sunDetailEl.textContent = `${formatTime(sunrise)} / ${formatTime(sunset)}`;
+  if (moonTimesEl) moonTimesEl.textContent = formatMoonTimes(moonTimes);
 
   const moonValue = getMoonPhaseValue(new Date());
   const moonDetail = card.querySelector('.moon-detail');
@@ -576,22 +695,8 @@ function updateCard(location, data) {
   const startIndex = hourlyIndex >= 0 ? hourlyIndex : 0;
   card.querySelector('.hourly-items').innerHTML = buildHourlyItems(data, startIndex);
   card.querySelector('.daily-items').innerHTML = buildDailyItems(data);
-  card.querySelector('.map-link').href = `https://www.rainviewer.com/map.html?loc=${location.latitude},${location.longitude},7`;
-  updateRadarPreview(card, location);
+  card.querySelector('.map-link').href = `https://www.rainviewer.com/map.html?loc=${location.latitude},${location.longitude},10`;
 }
-
-async function updateRadarPreview(card, location) {
-  const radarImage = card.querySelector('.radar-image');
-  if (!radarImage) return;
-  const radarUrl = await getRadarTileUrl(location.latitude, location.longitude);
-  if (radarUrl) {
-    radarImage.src = radarUrl;
-    radarImage.alt = `Radar preview for ${location.name}`;
-  } else {
-    radarImage.alt = 'Radar preview unavailable';
-  }
-}
-
 
 async function refreshWeather() {
   setStatusMessage('Fetching latest weather data…');
@@ -626,6 +731,7 @@ async function init() {
   if (savedUnit === 'fahrenheit') savedUnit = 'english';
   currentUnit = savedUnit;
   setTheme(currentTheme);
+  updateUnitToggleLabel();
 
   renderCards();
 
@@ -642,6 +748,7 @@ async function init() {
   });
   document.getElementById('unit-toggle').addEventListener('click', () => {
     currentUnit = currentUnit === 'metric' ? 'english' : 'metric';
+    updateUnitToggleLabel();
     saveSettings();
     refreshDisplay();
   });
