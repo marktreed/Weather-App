@@ -33,8 +33,9 @@ const defaultLocations = [
   {
     id: 1,
     name: 'Terrebonne, Oregon',
-    latitude: 44.4066,
-    longitude: -121.0823,
+    latitude: 44.35333,
+    longitude: -121.18083,
+    elevationMeters: 876,
     cardId: 'location-1-card',
     sunLabelId: 'location-1-sun-label',
     moonLabelId: 'location-1-moon-label',
@@ -855,6 +856,17 @@ function saveSettings() {
   }));
 }
 
+function formatElevation(location, dataElevation) {
+  const elevation = Number.isFinite(location.elevationMeters)
+    ? location.elevationMeters
+    : Number(dataElevation);
+  if (!Number.isFinite(elevation)) return 'Elevation --';
+
+  const value = currentUnit === 'english' ? Math.round(elevation * 3.28084) : Math.round(elevation);
+  const unit = currentUnit === 'english' ? 'ft' : 'm';
+  return `Elevation ${value} ${unit}`;
+}
+
 function setTheme(theme) {
   currentTheme = theme;
   document.body.classList.toggle('theme-light', theme === 'light');
@@ -950,7 +962,6 @@ function updateCard(location, data) {
 
   card.classList.remove('loading');
   const current = data.current_weather;
-  const elevation = Number(data.elevation);
   const currentTimestamp = new Date(current.time).getTime();
   const currentHourlyIndex = findCurrentHourlyIndex(data, currentTimestamp);
   const humidity = currentHourlyIndex >= 0 ? data.hourly.relativehumidity_2m[currentHourlyIndex] : '--';
@@ -1015,15 +1026,7 @@ function updateCard(location, data) {
   const windRibbonEl = card.querySelector('.wind-ribbon');
 
   if (conditionTextEl) conditionTextEl.textContent = weatherCodeMap[current.weathercode] || 'Weather';
-  if (elevationEl) {
-    if (Number.isFinite(elevation)) {
-      const value = currentUnit === 'english' ? Math.round(elevation * 3.28084) : Math.round(elevation);
-      const unit = currentUnit === 'english' ? 'ft' : 'm';
-      elevationEl.textContent = `Elevation ${value} ${unit}`;
-    } else {
-      elevationEl.textContent = 'Elevation --';
-    }
-  }
+  if (elevationEl) elevationEl.textContent = formatElevation(location, data.elevation);
   if (weatherIconEl) weatherIconEl.textContent = getWeatherEmoji(current.weathercode);
   if (temperatureEl) temperatureEl.textContent = `${convertTemperature(current.temperature)}\u00b0`;
   if (windDetailEl) windDetailEl.textContent = `${windArrow} ${windDirection} @ ${windSpeed} ${windUnit}`;
